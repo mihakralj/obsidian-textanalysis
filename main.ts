@@ -122,7 +122,6 @@ class TextAnalysisSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        containerEl.createEl('h2', { text: 'Settings for Text Analysis' });
 
         // Initialize plugin.settings.analysisMetricsSettings if undefined
         if (!this.plugin.settings.analysisMetricsSettings) {
@@ -206,27 +205,31 @@ export default class TextAnalysisPlugin extends Plugin {
         document.head.appendChild(this.headerElement);
     }
 
+    /*
     updateHeaderElementContent(title: string) {
-        if (this.headerElement) {
-            this.headerElement.textContent = `
+        const style = document.createElement('style');
+        style.textContent = `
             .mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer:after  {
-                    display: flex;
-                    align-items: center;
-                    font-weight: bold;
-                    content: '${'Text analysis - '+title}';
-                }
-            `;
-        }
+                display: flex;
+                align-items: center;
+                font-weight: bold;
+                content: '${'Text analysis - '+title}';
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    */
+    updateHeaderElementContent(title: string) {
+        const elements = document.querySelectorAll('.mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer');
+        elements.forEach(element => {
+            element.setAttribute('data-content', 'Text analysis - ' + title);
+        });
     }
 
     onunload() {
         if (this.headerElement && document.head.contains(this.headerElement)) {
             document.head.removeChild(this.headerElement);
             this.headerElement = null;
-            const leaves = this.app.workspace.getLeavesOfType('textAnalysis-view');
-            if (leaves.length > 0) {
-                this.app.workspace.detachLeavesOfType('textAnalysis-view');
-            }
         }
     }
 

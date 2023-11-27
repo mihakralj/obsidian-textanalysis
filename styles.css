@@ -1,0 +1,6 @@
+.mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer:after  {
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+    content: attr(data-content);
+}
