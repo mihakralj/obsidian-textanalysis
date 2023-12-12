@@ -171,6 +171,7 @@ export default class TextAnalysisPlugin extends Plugin {
     analysisGenerator: AnalysisGenerator;
     textAnalysisView: TextAnalysisView | null = null;
     headerElement: HTMLStyleElement | null = null;
+    leafInitialized = false;
 
     async onload() {
 		this.settings = Object.assign({}, await this.loadData());
@@ -205,20 +206,6 @@ export default class TextAnalysisPlugin extends Plugin {
         document.head.appendChild(this.headerElement);
     }
 
-    /*
-    updateHeaderElementContent(title: string) {
-        const style = document.createElement('style');
-        style.textContent = `
-            .mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer:after  {
-                display: flex;
-                align-items: center;
-                font-weight: bold;
-                content: '${'Text analysis - '+title}';
-            }
-        `;
-        document.head.appendChild(style);
-    }
-    */
     updateHeaderElementContent(title: string) {
         const elements = document.querySelectorAll('.mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer');
         elements.forEach(element => {
@@ -234,20 +221,22 @@ export default class TextAnalysisPlugin extends Plugin {
     }
 
     async activateView() {
-		let leaf = this.app.workspace.getLeavesOfType('textAnalysis-view')[0];
-		if (leaf) {
-			if (leaf.view instanceof TextAnalysisView) {
-				// If the plugin is already visible, close it
-				this.app.workspace.detachLeavesOfType('textAnalysis-view');
-			} else {
-				// If the plugin is not visible, reveal it
-				this.app.workspace.revealLeaf(leaf);
-			}
-		} else {
-			leaf = this.app.workspace.getRightLeaf(true);
-			await leaf.setViewState({ type: 'textAnalysis-view', active: true });
-			this.app.workspace.revealLeaf(leaf);
-		}
+        let leaf = this.app.workspace.getLeavesOfType('textAnalysis-view')[0];
+        if (!leaf) {
+            leaf = this.app.workspace.getRightLeaf(true);
+            await leaf.setViewState({ type: 'textAnalysis-view', active: true });
+            this.app.workspace.revealLeaf(leaf);
+            this.leafInitialized = true;
+        } else {
+            let leafEl = document.querySelector('.mod-right-split > .workspace-tabs:not(.mod-top)');
+            if (leafEl) {
+                if (leafEl.classList.contains('hidden')) {
+                    leafEl.classList.remove('hidden');
+                } else {
+                    leafEl.classList.add('hidden');
+                }
+            }
+        }
     }
 
 	async saveSettings() {

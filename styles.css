@@ -4,3 +4,7 @@
     font-weight: bold;
     content: attr(data-content);
 }
+
+.hidden {
+    display: none;
+}

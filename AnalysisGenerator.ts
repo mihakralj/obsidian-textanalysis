@@ -1,13 +1,13 @@
 import { MarkdownView } from 'obsidian';
 import TextAnalysisPlugin from 'main';
 import * as textReadability from 'text-readability';
+import { syllable } from 'syllable';
 
 // AnalysisGenerator class
-
-//const rs = require('text-readability')
-const syllable = require('syllable');
+//const syllable = require('syllable');
 
 export class AnalysisGenerator {
+    syllable: any;
     analysisMetrics: Array<{ id: string; active: boolean; label: string; value: string; }>;
     plugin: TextAnalysisPlugin;
     constructor(plugin: TextAnalysisPlugin) {
@@ -441,4 +441,3 @@ Spache Score: A readability formula specifically designed for primary-grade read
         return timeString;
     }
 }
-
