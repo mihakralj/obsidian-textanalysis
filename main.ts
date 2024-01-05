@@ -1,5 +1,3 @@
-// TextAnalysisPlugin.ts
-//import textReadability from 'text-readability';
 import { AnalysisGenerator } from 'AnalysisGenerator';
 import { App, Plugin, PluginSettingTab, WorkspaceLeaf, ItemView, Setting, MarkdownView } from 'obsidian';
 
@@ -174,7 +172,7 @@ export default class TextAnalysisPlugin extends Plugin {
     leafInitialized = false;
 
     async onload() {
-		this.settings = Object.assign({}, await this.loadData());
+		this.settings = { ...await this.loadData() };
         this.settings.analysisMetricsSettings = this.settings.analysisMetricsSettings || {};
 
 		this.analysisGenerator = new AnalysisGenerator(this);

@@ -111,9 +111,10 @@ Spache Score: A readability formula specifically designed for primary-grade read
             // Remove headers (lines starting with one or more # characters)
             .replace(/^#+\s+/gm, '')
             // Remove emphasis and bold (text surrounded by *, **, _, or __)
-            .replace(/(\*\*|\*|__|_)(.*?)\1/g, '$2')
+            .replace(/(\*\*|__)(.*?)\1/g, '$2')
+            .replace(/([*_])([^*_]*?)\1/g, '$2')
             // Remove links ([text](url))
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+            .replace(/\[([^[\]]+)\]\(([^()]+)\)/g, '$1')
             // Remove images (![alt text](url))
             .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '')
             // Remove blockquotes (lines starting with >)
@@ -144,8 +145,6 @@ Spache Score: A readability formula specifically designed for primary-grade read
             .replace(/^\|?[-:]+\|[-:| ]+\s*$/gm, '')
             // Replace multiple spaces with a single space
             .replace(/ +/g, ' ')
-
-        console.log(transform)
         return transform;
     }
 
@@ -276,7 +275,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
 
         // PSK
         this.calculateAndUpdate('PSK', () => {
-            const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []).filter(Boolean);
+            const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).filter(Boolean);
             const sentenceCount = this.sentenceCount(text);
 
             if (sentenceCount === 0) {
@@ -291,7 +290,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
 
         // Rix Readability
         this.calculateAndUpdate('RIX', () => {
-            const longWords = (text.match(/\b\w{6,}\b/g) || []);
+            const longWords = text.match(/\b\w{6,}\b/g) ?? [];
             const sentenceCount = this.sentenceCount(text);
 
             if (sentenceCount === 0) {
@@ -303,7 +302,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
 
         // Rix Difficulty
         this.calculateAndUpdate('RIXD', () => {
-            const longWords = (text.match(/\b\w{6,}\b/g) || []);
+            const longWords = text.match(/\b\w{6,}\b/g) ?? [];
             const sentenceCount = this.sentenceCount(text);
 
             if (sentenceCount === 0) {
@@ -319,7 +318,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
 
         // Lix Readability
         this.calculateAndUpdate('LIX', () => {
-            const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []);
+            const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
             const longWords = words.filter(word => word.length > 6);
             const sentenceCount = this.sentenceCount(text);
             if (sentenceCount === 0 || words.length === 0) {
@@ -332,7 +331,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
 
         // Lix Difficulty
         this.calculateAndUpdate('LIXD', () => {
-            const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []);
+            const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
             const longWords = words.filter(word => word.length > 6);
             const sentenceCount = this.sentenceCount(text);
             if (sentenceCount === 0 || words.length === 0) {
@@ -405,7 +404,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
     }
 
     static getFORCAST(text: string) {
-        const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || [];
+        const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
         let oneSyllableWordCount = 0;
 
         words.forEach(word => {
@@ -413,7 +412,6 @@ Spache Score: A readability formula specifically designed for primary-grade read
                 oneSyllableWordCount++;
             }
         });
-        const wordCount = words.length;
         const scaledOneSyllableCount = (oneSyllableWordCount / words.length) * 150;
         const forcastScore = 20 - (scaledOneSyllableCount / 10);
         return forcastScore;
@@ -421,7 +419,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
 
 
     static getReadingTimes(text: string) {
-        const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []).length;
+        const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).length;
 
         const fastTime = AnalysisGenerator.convertToHMS(wordCount / 250);
         const slowTime = AnalysisGenerator.convertToHMS(wordCount / 200);
@@ -430,7 +428,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
     }
 
     static getSpeakingTimes(text: string) {
-        const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []).length;
+        const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).length;
 
         const fastTime = AnalysisGenerator.convertToHMS(wordCount / 150);
         const slowTime = AnalysisGenerator.convertToHMS(wordCount / 125);

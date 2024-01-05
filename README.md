@@ -1,5 +1,7 @@
-![Version](https://img.shields.io/github/v/release/mihakralj/obsidian-textanalysis) ![GitHub all releases](https://img.shields.io/github/downloads/mihakralj/obsidian-textanalysis/total?color=blue)
- ![Stars](https://img.shields.io/github/stars/mihakralj/obsidian-textanalysis)
+[![Version](https://img.shields.io/github/v/release/mihakralj/obsidian-textanalysis)](https://github.com/mihakralj/obsidian-textanalysis) [![GitHub all releases](https://img.shields.io/github/downloads/mihakralj/obsidian-textanalysis/total?color=blue)](https://github.com/mihakralj/obsidian-textanalysis/releases)
+ [![Stars](https://img.shields.io/github/stars/mihakralj/obsidian-textanalysis?style=flat)](https://github.com/mihakralj/obsidian-textanalysis/stargazers)  
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-textanalysis&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-textanalysis) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-textanalysis&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=mihakralj_obsidian-textanalysis) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=mihakralj_obsidian-textanalysis&metric=alert_status)](https://sonarcloud.io/summary/overall?id=mihakralj_obsidian-textanalysis)
+
 
 # Obsidian Text Analytics plugin
 
@@ -93,7 +95,7 @@ The difficulty companion to the Lix Readability formula. Returns difficulty rank
 An aggregate assessment combining predictions from multiple grade level formulas. The consensus balances weaknesses in individual indicators to estimate overall reading difficulty. Target writing should aim for 7-8th US grade level (score) suiting broadly literate adults.
 
 ### Readability Rating
-Translates a text's readability score into a letter grade, ranging from 'A' to 'D', to indicate its complexity. Texts scoring between 7 and 8 receive an 'A', denoting high readability, while scores just below or slightly above this range get an 'A-'. The scale progresses downwards and upwards, with 'B+', 'B', 'B-' assigned to progressively less or more challenging texts. Texts with lowest readability, indicated by scores between 2 and 3 or higher than 12, receive grades from 'C+' down to 'D'. 
+Translates a text's readability score into a letter grade, ranging from 'A' to 'D', to indicate its complexity. Texts scoring between 7 and 8 receive an 'A', denoting high readability, while scores just below or slightly above this range get an 'A-'. The scale progresses downwards and upwards, with 'B+', 'B', 'B-' assigned to progressively less or more challenging texts. Texts with lowest readability, indicated by scores between 2 and 3 or higher than 12, receive grades from 'C+' down to 'D'.
 
 ### Reading Time
 The estimated time in minutes needed for oral reading of the full text passage based on counts of words, sentences and syllables. Lower times around 1-3 minutes enable easier comprehension across reader attention spans. Longer durations signify lengthy, dense text. Based on reading speed of 200-250 wpm.
