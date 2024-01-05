@@ -107,28 +107,51 @@ Spache Score: A readability formula specifically designed for primary-grade read
     }
 
     removeMarkdownFormatting(text: string) {
-        return text
-            // Remove headers
+        const transform =  text
+            // Remove headers (lines starting with one or more # characters)
             .replace(/^#+\s+/gm, '')
-            // Remove emphasis and bold
+            // Remove emphasis and bold (text surrounded by *, **, _, or __)
             .replace(/(\*\*|\*|__|_)(.*?)\1/g, '$2')
-            // Remove links
+            // Remove links ([text](url))
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-            // Remove images
+            // Remove images (![alt text](url))
             .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '')
-            // Remove blockquotes
+            // Remove blockquotes (lines starting with >)
             .replace(/^>\s+/gm, '')
-            // Remove horizontal rules
+            // Remove properties section (lines between --- and ---)
+            .replace(/^---[\r\n][\s\S]*?---[\r\n]/gm, '')
+            // Replace single line breaks with a space, preserve double line breaks
+            .replace(/(?<!\r?\n)\r?\n(?!\r?\n)/g, ' ')
+            // Remove horizontal rules (lines of ---, ***, or ___)
             .replace(/^[-*_]{3,}\s*$/gm, '')
-            // Remove inline code
+            // Remove inline code (text surrounded by `)
             .replace(/`([^`]*)`/g, '$1')
-            // Remove code blocks
+            // Remove code blocks (text between ``` and ```)
             .replace(/```([\s\S]*?)```/g, '$1')
-            // Remove unordered and ordered list symbols
+            // Remove unordered list markings (lines starting with *, -, or +)
             .replace(/^\s*[*\-+]\s+/gm, '')
+            // Remove ordered list markings (lines starting with a number followed by .)
             .replace(/^\s*\d+\.\s+/gm, '')
-            // Remove reference-style links
-            .replace(/^\s*\[([^]]+)\]:\s*(.+)$/gm, '');
+            // Remove reference-style links ([id]: url "optional title")
+            .replace(/^\s*\[([^]]+)\]:\s*(.+)$/gm, '')
+            // Remove strikethrough (text surrounded by ~~)
+            .replace(/~~(.*?)~~/g, '$1')
+            // Remove footnotes
+            .replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, '')
+            // Remove table structure but keep content
+            .replace(/\|\s*(.*?)\s*\|/g, ' $1 ')
+            // Remove horizontal lines in tables
+            .replace(/^\|?[-:]+\|[-:| ]+\s*$/gm, '')
+            // Replace multiple spaces with a single space
+            .replace(/ +/g, ' ')
+
+        console.log(transform)
+        return transform;
+    }
+
+    sentenceCount(text: string): number {
+        const sentences = text.split(/[.!?]/);
+        return sentences.length-1;
     }
 
     async calculateAndUpdate(id: string, calculation: () => string) {
@@ -174,7 +197,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
         });
 
         // Sentence count
-        this.calculateAndUpdate('Sent', () => textReadability.sentenceCount(text).toString());
+        this.calculateAndUpdate('Sent', () => this.sentenceCount(text).toString());
 
         // Paragraph count
         this.calculateAndUpdate('Para', () => {
@@ -254,7 +277,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
         // PSK
         this.calculateAndUpdate('PSK', () => {
             const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []).filter(Boolean);
-            const sentenceCount = textReadability.sentenceCount(text);
+            const sentenceCount = this.sentenceCount(text);
 
             if (sentenceCount === 0) {
                 return '0'; // or handle empty text case as per your requirement
@@ -269,7 +292,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
         // Rix Readability
         this.calculateAndUpdate('RIX', () => {
             const longWords = (text.match(/\b\w{6,}\b/g) || []);
-            const sentenceCount = textReadability.sentenceCount(text);
+            const sentenceCount = this.sentenceCount(text);
 
             if (sentenceCount === 0) {
                 return '0';
@@ -281,7 +304,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
         // Rix Difficulty
         this.calculateAndUpdate('RIXD', () => {
             const longWords = (text.match(/\b\w{6,}\b/g) || []);
-            const sentenceCount = textReadability.sentenceCount(text);
+            const sentenceCount = this.sentenceCount(text);
 
             if (sentenceCount === 0) {
                 return '';
@@ -298,7 +321,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
         this.calculateAndUpdate('LIX', () => {
             const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []);
             const longWords = words.filter(word => word.length > 6);
-            const sentenceCount = textReadability.sentenceCount(text);
+            const sentenceCount = this.sentenceCount(text);
             if (sentenceCount === 0 || words.length === 0) {
                 return '0';
             }
@@ -311,7 +334,7 @@ Spache Score: A readability formula specifically designed for primary-grade read
         this.calculateAndUpdate('LIXD', () => {
             const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) || []);
             const longWords = words.filter(word => word.length > 6);
-            const sentenceCount = textReadability.sentenceCount(text);
+            const sentenceCount = this.sentenceCount(text);
             if (sentenceCount === 0 || words.length === 0) {
                 return '';
             }
