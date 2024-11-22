@@ -1,17 +1,33 @@
 import { MarkdownView } from 'obsidian';
-import TextAnalysisPlugin from 'main';
-import * as textReadability from 'text-readability';
-import { syllable } from 'syllable';
+import TextAnalysisPlugin from './main';
+import readability from 'text-readability';
+import { syllable as syllableCount } from 'syllable';
 
-// AnalysisGenerator class
-//const syllable = require('syllable');
+export interface AnalysisMetric {
+    id: string;
+    active: boolean;
+    label: string;
+    value: string;
+}
+
+interface TextMetrics {
+    wordCount: number;
+    sentenceCount: number;
+    words: string[];
+}
+
+// Regex patterns as constants to avoid object comparison issues
+const LINK_PATTERN = /\[([^[\]]+)\]\(([^()]+)\)/g;
+const ITALIC_PATTERN = /([*_])([^*_]*?)\1/g;
+const TABLE_PATTERN = /\|\s*(.*?)\s*\|/g;
 
 export class AnalysisGenerator {
-    syllable: any;
-    analysisMetrics: Array<{ id: string; active: boolean; label: string; value: string; }>;
-    plugin: TextAnalysisPlugin;
+    private readonly plugin: TextAnalysisPlugin;
+    private readonly _analysisMetrics: AnalysisMetric[];
+
     constructor(plugin: TextAnalysisPlugin) {
-        this.analysisMetrics = [
+        this.plugin = plugin;
+        this._analysisMetrics = [
             { id: 'Char', active: true, label: 'Character Count', value: '0' },
             { id: 'Lettr', active: true, label: 'Letter Count', value: '0' },
             { id: 'Word', active: true, label: 'Word Count', value: '0' },
@@ -45,420 +61,315 @@ export class AnalysisGenerator {
             { id: 'RdTm', active: true, label: 'Reading time', value: '0:00' },
             { id: 'SpkT', active: true, label: 'Speaking time', value: '0:00' },
         ];
+    }
 
-/*
-
-CEFR Level: The Common European Framework of Reference for Languages level indicating the difficulty of the text for language learnetextReadability.
-IELTS Level: Reflecting the International English Language Testing System band level.
-Spache Score: A readability formula specifically designed for primary-grade reading materials.
-*/
-
-
-        this.plugin = plugin;
+    // Public getter for analysisMetrics
+    get analysisMetrics(): AnalysisMetric[] {
+        return this._analysisMetrics;
     }
 
     displayAnalysis(): HTMLElement {
         const container = document.createElement('div');
-        container.style.marginLeft = '0';
-        container.style.marginRight = '0';
-        container.style.overflowY = 'auto';
-        container.style.maxHeight = '800px';
+        container.style.cssText = 'margin-left: 0; margin-right: 0; overflow-y: auto; max-height: 800px;';
 
         const table = document.createElement('table');
         table.classList.add('nav-folder-title');
-        table.style.width = '100%';
-        table.style.borderCollapse = 'collapse';
+        table.style.cssText = 'width: 100%; border-collapse: collapse;';
 
         const tbody = document.createElement('tbody');
         table.appendChild(tbody);
 
-        this.analysisMetrics.forEach(item => {
-            if (item.active) {
-                const row = tbody.insertRow();
-            const labelCell = row.insertCell();
-            labelCell.textContent = item.label;
-            labelCell.style.textAlign = 'left';
-            const valueCell = row.insertCell();
-            valueCell.textContent = item.value;
-            valueCell.dataset.id = item.id;
-            valueCell.style.textAlign = 'right';
-            }
-        });
+        const color = window.getComputedStyle(document.body).color.match(/\d+/g);
+        const borderColor = color ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.05)` : 'rgba(0, 0, 0, 0.05)';
 
-        tbody.querySelectorAll('td').forEach(cell => {
-            cell.style.padding = '2px 10px 2px 0px';
-            cell.style.width = '100%';
-            cell.style.whiteSpace = 'nowrap';
-            const color = window.getComputedStyle(document.body).color.match(/\d+/g);
-            if (color) {
-                cell.style.borderBottom = `1px solid rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.05)`;
-            } else {
-                cell.style.borderBottom = '1px solid rgba(0, 0, 0, 0.05)';
-            }
-        });
+        this._analysisMetrics
+            .filter(item => item.active)
+            .forEach(item => {
+                const row = tbody.insertRow();
+                const [labelCell, valueCell] = [row.insertCell(), row.insertCell()];
+
+                labelCell.textContent = item.label;
+                labelCell.style.cssText = `text-align: left; padding: 2px 10px 2px 0px; width: 100%; white-space: nowrap; border-bottom: 1px solid ${borderColor}`;
+
+                valueCell.textContent = item.value;
+                valueCell.dataset.id = item.id;
+                valueCell.style.cssText = `text-align: right; padding: 2px 10px 2px 0px; width: 100%; white-space: nowrap; border-bottom: 1px solid ${borderColor}`;
+            });
 
         container.appendChild(table);
-
-        const spacer = document.createElement('div');
-        spacer.style.height = '30px';
-        container.appendChild(spacer);
-
+        container.appendChild(this.createSpacer());
         return container;
     }
 
-    removeMarkdownFormatting(text: string) {
-        const transform =  text
-            // Remove headers (lines starting with one or more # characters)
-            .replace(/^#+\s+/gm, '')
-            // Remove emphasis and bold (text surrounded by *, **, _, or __)
-            .replace(/(\*\*|__)(.*?)\1/g, '$2')
-            .replace(/([*_])([^*_]*?)\1/g, '$2')
-            // Remove links ([text](url))
-            .replace(/\[([^[\]]+)\]\(([^()]+)\)/g, '$1')
-            // Remove images (![alt text](url))
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '')
-            // Remove blockquotes (lines starting with >)
-            .replace(/^>\s+/gm, '')
-            // Remove properties section (lines between --- and ---)
-            .replace(/^---[\r\n][\s\S]*?---[\r\n]/gm, '')
-            // Replace single line breaks with a space, preserve double line breaks
-            .replace(/(?<!\r?\n)\r?\n(?!\r?\n)/g, ' ')
-            // Remove horizontal rules (lines of ---, ***, or ___)
-            .replace(/^[-*_]{3,}\s*$/gm, '')
-            // Remove inline code (text surrounded by `)
-            .replace(/`([^`]*)`/g, '$1')
-            // Remove code blocks (text between ``` and ```)
-            .replace(/```([\s\S]*?)```/g, '$1')
-            // Remove unordered list markings (lines starting with *, -, or +)
-            .replace(/^\s*[*\-+]\s+/gm, '')
-            // Remove ordered list markings (lines starting with a number followed by .)
-            .replace(/^\s*\d+\.\s+/gm, '')
-            // Remove reference-style links ([id]: url "optional title")
-            .replace(/^\s*\[([^]]+)\]:\s*(.+)$/gm, '')
-            // Remove strikethrough (text surrounded by ~~)
-            .replace(/~~(.*?)~~/g, '$1')
-            // Remove footnotes
-            .replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, '')
-            // Remove table structure but keep content
-            .replace(/\|\s*(.*?)\s*\|/g, ' $1 ')
-            // Remove horizontal lines in tables
-            .replace(/^\|?[-:]+\|[-:| ]+\s*$/gm, '')
-            // Replace multiple spaces with a single space
-            .replace(/ +/g, ' ')
-        return transform;
+    private createSpacer(): HTMLElement {
+        const spacer = document.createElement('div');
+        spacer.style.height = '30px';
+        return spacer;
     }
 
-    sentenceCount(text: string): number {
-        const sentences = text.split(/[.!?]/);
-        return sentences.length-1;
+    removeMarkdownFormatting(text: string): string {
+        const markdownPatterns = [
+            /^#+\s+/gm,                           // Headers
+            /(\*\*|__)(.*?)\1/g,                 // Bold
+            /([*_])([^*_]*?)\1/g,               // Italic
+            /\[([^[\]]+)\]\(([^()]+)\)/g,       // Links
+            /!\[([^\]]*)\]\(([^)]+)\)/g,        // Images
+            /^>\s+/gm,                          // Blockquotes
+            /^---[\r\n][\s\S]*?---[\r\n]/gm,   // Front matter
+            /(?<!\r?\n)\r?\n(?!\r?\n)/g,       // Single newlines
+            /^[-*_]{3,}\s*$/gm,                // Horizontal rules
+            /`([^`]*)`/g,                      // Inline code
+            /```([\s\S]*?)```/g,               // Code blocks
+            /^\s*[*\-+]\s+/gm,                 // Unordered lists
+            /^\s*\d+\.\s+/gm,                  // Ordered lists
+            /^\s*\[([^]]+)\]:\s*(.+)$/gm,     // Reference links
+            /~~(.*?)~~/g,                      // Strikethrough
+            /^\[\^([^\]]+)\]:\s*(.+)$/gm,     // Footnotes
+            /\|\s*(.*?)\s*\|/g,                // Tables
+            /^\|?[-:]+\|[-:| ]+\s*$/gm,       // Table formatting
+            / +/g                              // Multiple spaces
+        ];
+
+        return markdownPatterns.reduce((text, pattern) => {
+            const patternStr = pattern.toString();
+            if (patternStr === LINK_PATTERN.toString()) return text.replace(pattern, '$1');
+            if (patternStr === ITALIC_PATTERN.toString()) return text.replace(pattern, '$2');
+            if (patternStr === TABLE_PATTERN.toString()) return text.replace(pattern, ' $1 ');
+            return text.replace(pattern, '');
+        }, text);
     }
 
-    async calculateAndUpdate(id: string, calculation: () => string) {
-        const result = await Promise.resolve(calculation());
-        const valueCell = document.querySelector(`td[data-id="${id}"]`);
-        if (valueCell) {
-            valueCell.textContent = result;
-        }
-        const metric = this.analysisMetrics.find(metric => metric.id === id);
-        if (metric) {
-            metric.value = result;
+    private getBaseTextMetrics(text: string): TextMetrics {
+        const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
+        const sentenceCount = (text.split(/[.!?]/).length - 1) || 0;
+        return {
+            words,
+            wordCount: words.length,
+            sentenceCount
+        };
+    }
+
+    async calculateAndUpdate(id: string, calculation: () => string): Promise<void> {
+        try {
+            const result = await Promise.resolve(calculation());
+            const valueCell = document.querySelector(`td[data-id="${id}"]`);
+            if (valueCell) {
+                valueCell.textContent = result;
+            }
+            const metric = this._analysisMetrics.find(metric => metric.id === id);
+            if (metric) {
+                metric.value = result;
+            }
+        } catch (error) {
+            console.error(`Error calculating metric ${id}:`, error);
         }
     }
 
     updateAnalysisValues(): void {
-        let text: string;
+        const text = this.getActiveText();
+        if (!text) return;
 
+        const metrics = this.getBaseTextMetrics(text);
+        this.updateBasicMetrics(text, metrics);
+        this.updateAdvancedMetrics(text, metrics);
+        this.updateReadabilityMetrics(text, metrics);
+        this.updateTimeMetrics(text);
+    }
+
+    private getActiveText(): string {
         const selection = window.getSelection();
         if (selection && selection.toString().length > 0) {
             this.plugin.updateHeaderElementContent('Selection');
-            text = this.removeMarkdownFormatting(selection.toString());
-        } else {
-            this.plugin.updateHeaderElementContent('Document');
-            const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-            if (activeView) {
-                const editor = activeView.editor;
-                text = this.removeMarkdownFormatting(editor.getValue());
-            } else {
-                return;
-            }
+            return this.removeMarkdownFormatting(selection.toString());
         }
 
-        // Character count
-        this.calculateAndUpdate('Char', () => textReadability.charCount(text, false).toString());
+        const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView) return '';
 
-        // Glyphs count (no spaces)
-        this.calculateAndUpdate('Lettr', () => textReadability.letterCount(text).toString());
+        this.plugin.updateHeaderElementContent('Document');
+        return this.removeMarkdownFormatting(activeView.editor.getValue());
+    }
 
-        // Unicode words count including apostrophes, hyphens, numbers
-        this.calculateAndUpdate('Word', () => {
-            const matches = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu);
-            return matches ? matches.length.toString() : '0';
-        });
+    private updateBasicMetrics(text: string, metrics: TextMetrics): void {
+        this.calculateAndUpdate('Char', () => readability.charCount(text, false).toString());
+        this.calculateAndUpdate('Lettr', () => readability.letterCount(text).toString());
+        this.calculateAndUpdate('Word', () => metrics.wordCount.toString());
+        this.calculateAndUpdate('Sent', () => metrics.sentenceCount.toString());
+        this.calculateAndUpdate('Para', () => (text.match(/[^\n]+\s*/g)?.length || 0).toString());
+        this.calculateAndUpdate('Syll', () => readability.syllableCount(text).toString());
+    }
 
-        // Sentence count
-        this.calculateAndUpdate('Sent', () => this.sentenceCount(text).toString());
+    private updateAdvancedMetrics(text: string, metrics: TextMetrics): void {
+        this.calculateAndUpdate('ASen', () => readability.averageSentenceLength(text).toString());
+        this.calculateAndUpdate('ASyl', () => readability.averageSyllablePerWord(text).toString());
+        this.calculateAndUpdate('AChr', () => readability.averageCharacterPerWord(text).toString());
+        this.calculateDifficultWords(metrics);
+        this.calculateSentenceComplexity(text, metrics);
+        this.calculateAndUpdate('LexD', () => readability.lexiconCount(text).toString());
+    }
 
-        // Paragraph count
-        this.calculateAndUpdate('Para', () => {
-            const matches = text.match(/[^\n]+\s*/g);
-            return matches ? matches.length.toString() : '0';
-        });
+    private updateReadabilityMetrics(text: string, metrics: TextMetrics): void {
+        this.calculateAndUpdate('GrdL', () => readability.textStandard(text));
+        this.calculateAndUpdate('GrdM', () => readability.textMedian(text));
+        this.calculateFleschMetrics(text);
+        this.calculateOtherReadabilityIndices(text);
+        this.calculateCustomReadabilityMetrics(text, metrics);
+    }
 
-        // Syllable count
-        this.calculateAndUpdate('Syll', () => textReadability.syllableCount(text).toString());
+    private updateTimeMetrics(text: string): void {
+        this.calculateAndUpdate('RdTm', () => TextUtils.getReadingTimes(text));
+        this.calculateAndUpdate('SpkT', () => TextUtils.getSpeakingTimes(text));
+    }
 
-        // Average Sentence Length
-        this.calculateAndUpdate('ASen', () => textReadability.averageSentenceLength(text).toString());
-
-        // Average Syllables per word
-        this.calculateAndUpdate('ASyl', () => textReadability.averageSyllablePerWord(text).toString());
-
-        // Average Char per word
-        this.calculateAndUpdate('AChr', () => textReadability.averageCharacterPerWord(text).toString());
-
+    private calculateDifficultWords(metrics: TextMetrics): void {
         this.calculateAndUpdate('Diff', () => {
-            const matches = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu);
-            const words = matches ? matches.length : 0;
-            const difficult = textReadability.difficultWords(text,3)
-            const result = difficult/words*100;
-            return result === 0 ? '0%' : parseFloat(result.toFixed(2)) + "%";
+            const difficult = readability.difficultWords(metrics.words.join(' '), 3);
+            const result = (difficult / metrics.wordCount) * 100;
+            return result === 0 ? '0%' : `${parseFloat(result.toFixed(2))}%`;
         });
+    }
 
+    private calculateSentenceComplexity(text: string, metrics: TextMetrics): void {
         this.calculateAndUpdate('SenC', () => {
-            const sentences = text.split(/[.!?]+/).filter(Boolean);
-            const totalClauses = sentences.reduce((total, sentence) => {
-                const clauseMarkers = /,|;|and|or|but|although|because/g;
-                return total + sentence.split(clauseMarkers).length;
-            }, 0);
-            return (sentences.length > 0 ? totalClauses / sentences.length : 0).toFixed(1);
+            if (metrics.sentenceCount === 0) return '0';
+            const clauseMarkers = /,|;|and|or|but|although|because/g;
+            const totalClauses = text.split(/[.!?]+/)
+                .filter(Boolean)
+                .reduce((total, sentence) => total + (sentence.match(clauseMarkers)?.length || 0) + 1, 0);
+            return (totalClauses / metrics.sentenceCount).toFixed(1);
         });
+    }
 
+    private calculateFleschMetrics(text: string): void {
+        const fleschScore = readability.fleschReadingEase(text);
+        this.calculateAndUpdate('FREs', () => fleschScore.toString());
+        this.calculateAndUpdate('FRDf', () => TextUtils.getDifficultyFromScore(fleschScore));
+        this.calculateAndUpdate('FKGL', () => readability.fleschKincaidGrade(text).toString());
+    }
 
-        // Lexical Diversity
-        this.calculateAndUpdate('LexD', () => textReadability.lexiconCount(text).toString());
+    private calculateOtherReadabilityIndices(text: string): void {
+        this.calculateAndUpdate('GFog', () => readability.gunningFog(text).toFixed(1));
+        this.calculateAndUpdate('SMOG', () => readability.smogIndex(text).toFixed(1));
+        this.calculateAndUpdate('FCST', () => TextUtils.getFORCAST(text).toFixed(1));
+        this.calculateAndUpdate('ARI', () => readability.automatedReadabilityIndex(text).toString());
+        this.calculateAndUpdate('CLI', () => readability.colemanLiauIndex(text).toString());
+        this.calculateAndUpdate('LWri', () => readability.linsearWriteFormula(text).toString());
+        this.calculateAndUpdate('NDCh', () => readability.daleChallReadabilityScore(text).toString());
+    }
 
-        // Grade Level (consensus)
-        this.calculateAndUpdate('GrdL', () => textReadability.textStandard(text).toString());
+    private calculateCustomReadabilityMetrics(text: string, metrics: TextMetrics): void {
+        this.calculatePSKGrade(metrics);
+        this.calculateRixMetrics(text, metrics);
+        this.calculateLixMetrics(text, metrics);
+        this.calculateReadabilityRating(text);
+    }
 
-        // Grade Median (consensus)
-        this.calculateAndUpdate('GrdM', () => textReadability.textMedian(text).toString());
-
-        // Flesch-Kincaid Reading Ease
-        this.calculateAndUpdate('FREs', () => textReadability.fleschReadingEase(text).toString());
-
-        // Flesch Reading Difficulty
-        this.calculateAndUpdate('FRDf', () => AnalysisGenerator.getDifficultyFromScore(textReadability.fleschReadingEase(text)));
-
-        // Flesch-Kincaid Grade Level
-        this.calculateAndUpdate('FKGL', () => textReadability.fleschKincaidGrade(text).toString());
-
-        // Gunning Fog Index
-        this.calculateAndUpdate('GFog', () => textReadability.gunningFog(text).toFixed(1));
-
-        // SMOG Index
-        this.calculateAndUpdate('SMOG', () => textReadability.smogIndex(text).toFixed(1));
-
-        // FORCAST Index
-        this.calculateAndUpdate('FCST', () => AnalysisGenerator.getFORCAST(text).toFixed(1));
-
-        // Automated Readability Index
-        this.calculateAndUpdate('ARI', () => textReadability.automatedReadabilityIndex(text).toString());
-
-        // Coleman-Liau Index
-        this.calculateAndUpdate('CLI', () => textReadability.colemanLiauIndex(text).toString());
-
-        // Linsear Write Formula
-        this.calculateAndUpdate('LWri', () => textReadability.linsearWriteFormula(text).toString());
-
-        // Dale-Chall Readability Score
-        this.calculateAndUpdate('NDCh', () => textReadability.daleChallReadabilityScore(text).toString());
-
-        // PSK
+    private calculatePSKGrade(metrics: TextMetrics): void {
         this.calculateAndUpdate('PSK', () => {
-            const words = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).filter(Boolean);
-            const sentenceCount = this.sentenceCount(text);
-
-            if (sentenceCount === 0) {
-                return '0'; // or handle empty text case as per your requirement
-            }
-
-            const averageSentenceLength = words.length / sentenceCount;
-            const averageWordLength = words.reduce((acc, word) => acc + syllable(word), 0) / words.length;
-
-            return ((0.0778 * averageSentenceLength) + (0.0455 * averageWordLength) + 2.797).toFixed(2);
+            if (metrics.sentenceCount === 0) return '0';
+            const avgSentenceLength = metrics.wordCount / metrics.sentenceCount;
+            const avgSyllables = metrics.words.reduce((acc, word) => acc + syllableCount(word), 0) / metrics.wordCount;
+            return ((0.0778 * avgSentenceLength) + (0.0455 * avgSyllables) + 2.797).toFixed(2);
         });
-
-        // Rix Readability
-        this.calculateAndUpdate('RIX', () => {
-            const longWords = text.match(/\b\w{6,}\b/g) ?? [];
-            const sentenceCount = this.sentenceCount(text);
-
-            if (sentenceCount === 0) {
-                return '0';
-            }
-            const rixScore = longWords.length / sentenceCount;
-            return rixScore.toFixed(1);
-        });
-
-        // Rix Difficulty
-        this.calculateAndUpdate('RIXD', () => {
-            const longWords = text.match(/\b\w{6,}\b/g) ?? [];
-            const sentenceCount = this.sentenceCount(text);
-
-            if (sentenceCount === 0) {
-                return '';
-            }
-            const rixScore = longWords.length / sentenceCount;
-            if (rixScore < 4 ) {
-                return 'Easy';
-            } else if (rixScore >= 4 && rixScore < 6) {
-                return 'Moderate'
-            } else return 'Complex'
-        });
-
-        // Lix Readability
-        this.calculateAndUpdate('LIX', () => {
-            const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
-            const longWords = words.filter(word => word.length > 6);
-            const sentenceCount = this.sentenceCount(text);
-            if (sentenceCount === 0 || words.length === 0) {
-                return '0';
-            }
-
-            const lixScore = (words.length / sentenceCount) + ((longWords.length / words.length) * 100);
-            return lixScore.toFixed(1);
-        });
-
-        // Lix Difficulty
-        this.calculateAndUpdate('LIXD', () => {
-            const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
-            const longWords = words.filter(word => word.length > 6);
-            const sentenceCount = this.sentenceCount(text);
-            if (sentenceCount === 0 || words.length === 0) {
-                return '';
-            }
-            const lixScore = (words.length / sentenceCount) + ((longWords.length / words.length) * 100);
-            if (lixScore < 30 ) {
-                return 'Very easy';
-            } else if (lixScore < 40) {
-                return 'Easy'
-            } else if (lixScore < 50) {
-                return 'Medium'
-            } else if (lixScore < 60) {
-                return 'Difficult'
-            } else return 'Very difficult'
-        });
-
-        // Reading Time
-        this.calculateAndUpdate('RdTm', () => AnalysisGenerator.getReadingTimes(text));
-
-        // Speaking Time
-        this.calculateAndUpdate('SpkT', () => AnalysisGenerator.getSpeakingTimes(text));
-
-        // Readability rating
-        this.calculateAndUpdate('Rdbl', () => {
-
-            const score = parseFloat(textReadability.textMedian(text));
-
-            if (score >= 7 && score <= 8) {
-                return 'A';
-            } else if ((score >= 6 && score < 7) || (score >= 8.1 && score < 9)) {
-                return 'A-';
-            } else if ((score >= 5 && score < 6)  || (score >= 9 && score < 10)) {
-                return 'B+';
-            } else if ((score >= 4 && score < 5) || (score >= 10 && score < 11)) {
-                return 'B';
-            } else if ((score >= 3 && score < 4) || (score >= 11 && score < 12)) {
-                return 'B-';
-            } else if ((score >= 2 && score < 3) || (score >= 12 && score < 13)) {
-                return 'C+';
-            } else if ((score >= 1 && score < 2) || (score >= 13 && score < 14)) {
-                return 'C';
-            } else if (score === 1 || (score >= 14 && score < 15)) {
-                return 'C-';
-            } else if (score >= 15) {
-                return 'D';
-            } else {
-                return 'Invalid Score';
-            }
-        });
-
     }
 
-    static getDifficultyFromScore(score: number) {
-        if (score >= 90 && score <= 100) {
-            return "Very Easy";
-        } else if (score >= 80 && score < 90) {
-            return "Easy";
-        } else if (score >= 70 && score < 80) {
-            return "Fairly Easy";
-        } else if (score >= 60 && score < 70) {
-            return "Standard";
-        } else if (score >= 50 && score < 60) {
-            return "Fairly Difficult";
-        } else if (score >= 30 && score < 50) {
-            return "Difficult";
-        } else {
-            return "Very Confusing";
+    private calculateRixMetrics(text: string, metrics: TextMetrics): void {
+        const longWords = text.match(/\b\w{6,}\b/g) ?? [];
+        const rixScore = metrics.sentenceCount === 0 ? 0 : longWords.length / metrics.sentenceCount;
+
+        this.calculateAndUpdate('RIX', () => rixScore.toFixed(1));
+        this.calculateAndUpdate('RIXD', () => TextUtils.getRixDifficulty(rixScore));
+    }
+
+    private calculateLixMetrics(text: string, metrics: TextMetrics): void {
+        if (metrics.sentenceCount === 0 || metrics.wordCount === 0) {
+            this.calculateAndUpdate('LIX', () => '0');
+            this.calculateAndUpdate('LIXD', () => '');
+            return;
         }
+
+        const longWords = metrics.words.filter(word => word.length > 6);
+        const lixScore = (metrics.wordCount / metrics.sentenceCount) + ((longWords.length / metrics.wordCount) * 100);
+
+        this.calculateAndUpdate('LIX', () => lixScore.toFixed(1));
+        this.calculateAndUpdate('LIXD', () => TextUtils.getLixDifficulty(lixScore));
     }
 
-    static getFORCAST(text: string) {
-        const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
-        let oneSyllableWordCount = 0;
-
-        words.forEach(word => {
-            if (syllable(word) === 1) {
-                oneSyllableWordCount++;
-            }
+    private calculateReadabilityRating(text: string): void {
+        this.calculateAndUpdate('Rdbl', () => {
+            const score = parseFloat(readability.textMedian(text));
+            return TextUtils.getReadabilityGrade(score);
         });
-        const scaledOneSyllableCount = (oneSyllableWordCount / words.length) * 150;
-        const forcastScore = 20 - (scaledOneSyllableCount / 10);
-        return forcastScore;
+    }
+}
+
+class TextUtils {
+    static getDifficultyFromScore(score: number): string {
+        if (score >= 90) return "Very Easy";
+        if (score >= 80) return "Easy";
+        if (score >= 70) return "Fairly Easy";
+        if (score >= 60) return "Standard";
+        if (score >= 50) return "Fairly Difficult";
+        if (score >= 30) return "Difficult";
+        return "Very Confusing";
     }
 
-
-    static getReadingTimes(text: string) {
-        const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).length;
-
-        const fastTime = AnalysisGenerator.convertToHMS(wordCount / 250);
-        const slowTime = AnalysisGenerator.convertToHMS(wordCount / 200);
-
-        return `${fastTime} - ${slowTime}`;
+    static getFORCAST(text: string): number {
+        const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
+        const oneSyllableCount = words.filter(word => syllableCount(word) === 1).length;
+        const scaledOneSyllableCount = (oneSyllableCount / words.length) * 150;
+        return 20 - (scaledOneSyllableCount / 10);
     }
 
-    static getSpeakingTimes(text: string) {
+    static getReadingTimes(text: string): string {
         const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).length;
+        return `${this.convertToHMS(wordCount / 250)} - ${this.convertToHMS(wordCount / 200)}`;
+    }
 
-        const fastTime = AnalysisGenerator.convertToHMS(wordCount / 150);
-        const slowTime = AnalysisGenerator.convertToHMS(wordCount / 125);
-
-        return `${fastTime} - ${slowTime}`;
+    static getSpeakingTimes(text: string): string {
+        const wordCount = (text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? []).length;
+        return `${this.convertToHMS(wordCount / 150)} - ${this.convertToHMS(wordCount / 125)}`;
     }
 
     static convertToHMS(minutes: number): string {
         const totalSeconds = Math.round(minutes * 60);
-
         const hours = Math.floor(totalSeconds / 3600);
-        const minutesLeft = Math.floor((totalSeconds - hours * 3600) / 60);
-        const seconds = totalSeconds - hours * 3600 - minutesLeft * 60;
-
-        let timeString = '';
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
 
         if (hours > 0) {
-            timeString += `${hours}:`;
+            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
-
-        if (minutesLeft > 0 || hours > 0) {
-            timeString += `${hours > 0 ? minutesLeft.toString().padStart(2, '0') : minutesLeft}:`;
+        if (mins > 0) {
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
+        return `${secs}s`;
+    }
 
-        timeString += (minutesLeft > 0 ? seconds.toString().padStart(2, '0') : seconds);
+    static getRixDifficulty(score: number): string {
+        if (score < 4) return 'Easy';
+        if (score < 6) return 'Moderate';
+        return 'Complex';
+    }
 
-        if (hours === 0 && minutesLeft === 0) {
-            timeString += 's';
-        }
+    static getLixDifficulty(score: number): string {
+        if (score < 30) return 'Very easy';
+        if (score < 40) return 'Easy';
+        if (score < 50) return 'Medium';
+        if (score < 60) return 'Difficult';
+        return 'Very difficult';
+    }
 
-        return timeString;
+    static getReadabilityGrade(score: number): string {
+        if (score >= 7 && score <= 8) return 'A';
+        if ((score >= 6 && score < 7) || (score >= 8.1 && score < 9)) return 'A-';
+        if ((score >= 5 && score < 6) || (score >= 9 && score < 10)) return 'B+';
+        if ((score >= 4 && score < 5) || (score >= 10 && score < 11)) return 'B';
+        if ((score >= 3 && score < 4) || (score >= 11 && score < 12)) return 'B-';
+        if ((score >= 2 && score < 3) || (score >= 12 && score < 13)) return 'C+';
+        if ((score >= 1 && score < 2) || (score >= 13 && score < 14)) return 'C';
+        if (score === 1 || (score >= 14 && score < 15)) return 'C-';
+        if (score >= 15) return 'D';
+        return 'Invalid Score';
     }
 }

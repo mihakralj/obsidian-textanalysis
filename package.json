@@ -1,0 +1,29 @@
+{
+  "name": "obsidian-textanalysis",
+  "version": "1.2.0",
+  "description": "Real-time text analysis on readability, structure, and complexity, incorporating over 30 tests like Average Syllables per Word, percent of difficult words, Lexical Diversity, Flesch Reading Ease Score, Gunning Fog Index, SMOG index, Rix, Lix, Reading level and Reading/Speaking time.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "version": "node version-bump.mjs && git add manifest.json versions.json"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "text-analysis",
+    "readability"
+  ],
+  "author": "Miha Kralj",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.9.1",
+    "typescript": "^5.6.3",
+    "esbuild": "^0.19.0",
+    "builtin-modules": "^4.0.0"
+  },
+  "dependencies": {
+    "obsidian": "^1.7.2",
+    "textstat": "^0.8.0"
+  }
+}

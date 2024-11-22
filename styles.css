@@ -8,3 +8,8 @@
 .hidden {
     display: none;
 }
+
+/* Smaller font size for analysis table */
+.nav-folder-title td {
+    font-size: 0.85em;
+}
