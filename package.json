@@ -1,6 +1,6 @@
 {
   "name": "obsidian-textanalysis",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Real-time text analysis on readability, structure, and complexity, incorporating over 30 tests like Average Syllables per Word, percent of difficult words, Lexical Diversity, Flesch Reading Ease Score, Gunning Fog Index, SMOG index, Rix, Lix, Reading level and Reading/Speaking time.",
   "main": "main.js",
   "scripts": {
@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "obsidian": "^1.7.2",
-    "textstat": "^0.8.0"
+    "text-readability": "^1.1.0",
+    "syllable": "^5.0.1",
+    "tslib": "^2.6.2"
   }
 }

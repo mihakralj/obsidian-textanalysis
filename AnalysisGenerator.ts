@@ -86,6 +86,17 @@ export class AnalysisGenerator {
             .filter(item => item.active)
             .forEach(item => {
                 const row = tbody.insertRow();
+                row.style.cursor = 'pointer';
+                row.addEventListener('click', () => {
+                    // Open settings when a row is clicked
+                    const app = (this.plugin.app as any);
+                    const settingsTab = app.setting.settingTabs.find((tab: any) => tab.id === 'textanalysis');
+                    if (settingsTab) {
+                        app.setting.open();
+                        app.setting.openTabById('textanalysis');
+                    }
+                });
+
                 const [labelCell, valueCell] = [row.insertCell(), row.insertCell()];
 
                 labelCell.textContent = item.label;
@@ -108,40 +119,49 @@ export class AnalysisGenerator {
     }
 
     removeMarkdownFormatting(text: string): string {
+        // First, normalize line endings and ensure proper spacing
+        text = text.replace(/\r\n/g, '\n')
+                  .replace(/\n\n+/g, '\n\n')  // Normalize multiple newlines to double newlines
+                  .replace(/([.!?])\s*/g, '$1 '); // Ensure space after punctuation
+
         const markdownPatterns = [
-            /^#+\s+/gm,                           // Headers
-            /(\*\*|__)(.*?)\1/g,                 // Bold
-            /([*_])([^*_]*?)\1/g,               // Italic
-            /\[([^[\]]+)\]\(([^()]+)\)/g,       // Links
-            /!\[([^\]]*)\]\(([^)]+)\)/g,        // Images
-            /^>\s+/gm,                          // Blockquotes
-            /^---[\r\n][\s\S]*?---[\r\n]/gm,   // Front matter
-            /(?<!\r?\n)\r?\n(?!\r?\n)/g,       // Single newlines
-            /^[-*_]{3,}\s*$/gm,                // Horizontal rules
-            /`([^`]*)`/g,                      // Inline code
-            /```([\s\S]*?)```/g,               // Code blocks
-            /^\s*[*\-+]\s+/gm,                 // Unordered lists
-            /^\s*\d+\.\s+/gm,                  // Ordered lists
-            /^\s*\[([^]]+)\]:\s*(.+)$/gm,     // Reference links
-            /~~(.*?)~~/g,                      // Strikethrough
-            /^\[\^([^\]]+)\]:\s*(.+)$/gm,     // Footnotes
-            /\|\s*(.*?)\s*\|/g,                // Tables
-            /^\|?[-:]+\|[-:| ]+\s*$/gm,       // Table formatting
-            / +/g                              // Multiple spaces
+            { pattern: /^#+\s+/gm, replacement: '' },                    // Headers
+            { pattern: /(\*\*|__)(.*?)\1/g, replacement: '$2' },        // Bold
+            { pattern: /([*_])([^*_]*?)\1/g, replacement: '$2' },       // Italic
+            { pattern: /\[([^[\]]+)\]\(([^()]+)\)/g, replacement: '$1' }, // Links
+            { pattern: /!\[([^\]]*)\]\(([^)]+)\)/g, replacement: '' },  // Images
+            { pattern: /^>\s+/gm, replacement: '' },                    // Blockquotes
+            { pattern: /^---[\r\n][\s\S]*?---[\r\n]/gm, replacement: '' }, // Front matter
+            { pattern: /^[-*_]{3,}\s*$/gm, replacement: '' },          // Horizontal rules
+            { pattern: /`([^`]*)`/g, replacement: '$1' },              // Inline code
+            { pattern: /```([\s\S]*?)```/g, replacement: '' },         // Code blocks
+            { pattern: /^\s*[*\-+]\s+/gm, replacement: '' },           // Unordered lists
+            { pattern: /^\s*\d+\.\s+/gm, replacement: '' },            // Ordered lists
+            { pattern: /^\s*\[([^]]+)\]:\s*(.+)$/gm, replacement: '' }, // Reference links
+            { pattern: /~~(.*?)~~/g, replacement: '$1' },              // Strikethrough
+            { pattern: /^\[\^([^\]]+)\]:\s*(.+)$/gm, replacement: '' }, // Footnotes
+            { pattern: /\|\s*(.*?)\s*\|/g, replacement: '$1' },        // Tables
+            { pattern: /^\|?[-:]+\|[-:| ]+\s*$/gm, replacement: '' },  // Table formatting
         ];
 
-        return markdownPatterns.reduce((text, pattern) => {
-            const patternStr = pattern.toString();
-            if (patternStr === LINK_PATTERN.toString()) return text.replace(pattern, '$1');
-            if (patternStr === ITALIC_PATTERN.toString()) return text.replace(pattern, '$2');
-            if (patternStr === TABLE_PATTERN.toString()) return text.replace(pattern, ' $1 ');
-            return text.replace(pattern, '');
-        }, text);
+        // Apply each pattern while preserving spaces
+        let cleanText = text;
+        for (const { pattern, replacement } of markdownPatterns) {
+            cleanText = cleanText.replace(pattern, replacement);
+        }
+
+        // Clean up any remaining multiple spaces while preserving single spaces
+        cleanText = cleanText.replace(/\s+/g, ' ').trim();
+
+        // console.log('DEBUG - Text after markdown removal:', cleanText);
+        return cleanText;
     }
 
     private getBaseTextMetrics(text: string): TextMetrics {
         const words = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu) ?? [];
-        const sentenceCount = (text.split(/[.!?]/).length - 1) || 0;
+        const sentenceCount = (text.match(/[.!?]+/g) || []).length;
+        // console.log('DEBUG - Words found:', words);
+        // console.log('DEBUG - Sentence count:', sentenceCount);
         return {
             words,
             wordCount: words.length,
@@ -160,6 +180,9 @@ export class AnalysisGenerator {
             if (metric) {
                 metric.value = result;
             }
+            // if (id === 'FREs') {
+            //     console.log('DEBUG - Flesch Reading Ease Score:', result);
+            // }
         } catch (error) {
             console.error(`Error calculating metric ${id}:`, error);
         }
@@ -169,6 +192,7 @@ export class AnalysisGenerator {
         const text = this.getActiveText();
         if (!text) return;
 
+        // console.log('DEBUG - Active text:', text);
         const metrics = this.getBaseTextMetrics(text);
         this.updateBasicMetrics(text, metrics);
         this.updateAdvancedMetrics(text, metrics);
@@ -179,14 +203,12 @@ export class AnalysisGenerator {
     private getActiveText(): string {
         const selection = window.getSelection();
         if (selection && selection.toString().length > 0) {
-            this.plugin.updateHeaderElementContent('Selection');
             return this.removeMarkdownFormatting(selection.toString());
         }
 
         const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
         if (!activeView) return '';
 
-        this.plugin.updateHeaderElementContent('Document');
         return this.removeMarkdownFormatting(activeView.editor.getValue());
     }
 
@@ -241,8 +263,10 @@ export class AnalysisGenerator {
     }
 
     private calculateFleschMetrics(text: string): void {
+        // console.log('DEBUG - Calculating Flesch metrics for text:', text);
         const fleschScore = readability.fleschReadingEase(text);
-        this.calculateAndUpdate('FREs', () => fleschScore.toString());
+        // console.log('DEBUG - Raw Flesch score:', fleschScore);
+        this.calculateAndUpdate('FREs', () => fleschScore.toFixed(1));
         this.calculateAndUpdate('FRDf', () => TextUtils.getDifficultyFromScore(fleschScore));
         this.calculateAndUpdate('FKGL', () => readability.fleschKincaidGrade(text).toString());
     }

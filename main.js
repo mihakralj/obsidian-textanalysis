@@ -4043,9 +4043,6 @@ var readability = new Readability();
 var main_default = readability;
 
 // AnalysisGenerator.ts
-var LINK_PATTERN = /\[([^[\]]+)\]\(([^()]+)\)/g;
-var ITALIC_PATTERN = /([*_])([^*_]*?)\1/g;
-var TABLE_PATTERN = /\|\s*(.*?)\s*\|/g;
 var AnalysisGenerator = class {
   constructor(plugin) {
     this.plugin = plugin;
@@ -4100,6 +4097,15 @@ var AnalysisGenerator = class {
     const borderColor = color ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.05)` : "rgba(0, 0, 0, 0.05)";
     this._analysisMetrics.filter((item) => item.active).forEach((item) => {
       const row = tbody.insertRow();
+      row.style.cursor = "pointer";
+      row.addEventListener("click", () => {
+        const app = this.plugin.app;
+        const settingsTab = app.setting.settingTabs.find((tab) => tab.id === "textanalysis");
+        if (settingsTab) {
+          app.setting.open();
+          app.setting.openTabById("textanalysis");
+        }
+      });
       const [labelCell, valueCell] = [row.insertCell(), row.insertCell()];
       labelCell.textContent = item.label;
       labelCell.style.cssText = `text-align: left; padding: 2px 10px 2px 0px; width: 100%; white-space: nowrap; border-bottom: 1px solid ${borderColor}`;
@@ -4117,61 +4123,54 @@ var AnalysisGenerator = class {
     return spacer;
   }
   removeMarkdownFormatting(text) {
+    text = text.replace(/\r\n/g, "\n").replace(/\n\n+/g, "\n\n").replace(/([.!?])\s*/g, "$1 ");
     const markdownPatterns = [
-      /^#+\s+/gm,
+      { pattern: /^#+\s+/gm, replacement: "" },
       // Headers
-      /(\*\*|__)(.*?)\1/g,
+      { pattern: /(\*\*|__)(.*?)\1/g, replacement: "$2" },
       // Bold
-      /([*_])([^*_]*?)\1/g,
+      { pattern: /([*_])([^*_]*?)\1/g, replacement: "$2" },
       // Italic
-      /\[([^[\]]+)\]\(([^()]+)\)/g,
+      { pattern: /\[([^[\]]+)\]\(([^()]+)\)/g, replacement: "$1" },
       // Links
-      /!\[([^\]]*)\]\(([^)]+)\)/g,
+      { pattern: /!\[([^\]]*)\]\(([^)]+)\)/g, replacement: "" },
       // Images
-      /^>\s+/gm,
+      { pattern: /^>\s+/gm, replacement: "" },
       // Blockquotes
-      /^---[\r\n][\s\S]*?---[\r\n]/gm,
+      { pattern: /^---[\r\n][\s\S]*?---[\r\n]/gm, replacement: "" },
       // Front matter
-      /(?<!\r?\n)\r?\n(?!\r?\n)/g,
-      // Single newlines
-      /^[-*_]{3,}\s*$/gm,
+      { pattern: /^[-*_]{3,}\s*$/gm, replacement: "" },
       // Horizontal rules
-      /`([^`]*)`/g,
+      { pattern: /`([^`]*)`/g, replacement: "$1" },
       // Inline code
-      /```([\s\S]*?)```/g,
+      { pattern: /```([\s\S]*?)```/g, replacement: "" },
       // Code blocks
-      /^\s*[*\-+]\s+/gm,
+      { pattern: /^\s*[*\-+]\s+/gm, replacement: "" },
       // Unordered lists
-      /^\s*\d+\.\s+/gm,
+      { pattern: /^\s*\d+\.\s+/gm, replacement: "" },
       // Ordered lists
-      /^\s*\[([^]]+)\]:\s*(.+)$/gm,
+      { pattern: /^\s*\[([^]]+)\]:\s*(.+)$/gm, replacement: "" },
       // Reference links
-      /~~(.*?)~~/g,
+      { pattern: /~~(.*?)~~/g, replacement: "$1" },
       // Strikethrough
-      /^\[\^([^\]]+)\]:\s*(.+)$/gm,
+      { pattern: /^\[\^([^\]]+)\]:\s*(.+)$/gm, replacement: "" },
       // Footnotes
-      /\|\s*(.*?)\s*\|/g,
+      { pattern: /\|\s*(.*?)\s*\|/g, replacement: "$1" },
       // Tables
-      /^\|?[-:]+\|[-:| ]+\s*$/gm,
+      { pattern: /^\|?[-:]+\|[-:| ]+\s*$/gm, replacement: "" }
       // Table formatting
-      / +/g
-      // Multiple spaces
     ];
-    return markdownPatterns.reduce((text2, pattern) => {
-      const patternStr = pattern.toString();
-      if (patternStr === LINK_PATTERN.toString())
-        return text2.replace(pattern, "$1");
-      if (patternStr === ITALIC_PATTERN.toString())
-        return text2.replace(pattern, "$2");
-      if (patternStr === TABLE_PATTERN.toString())
-        return text2.replace(pattern, " $1 ");
-      return text2.replace(pattern, "");
-    }, text);
+    let cleanText = text;
+    for (const { pattern, replacement } of markdownPatterns) {
+      cleanText = cleanText.replace(pattern, replacement);
+    }
+    cleanText = cleanText.replace(/\s+/g, " ").trim();
+    return cleanText;
   }
   getBaseTextMetrics(text) {
     var _a;
     const words = (_a = text.match(/\b\p{L}(['\-\p{L}\p{N}]*\p{L})?\b/gu)) != null ? _a : [];
-    const sentenceCount = text.split(/[.!?]/).length - 1 || 0;
+    const sentenceCount = (text.match(/[.!?]+/g) || []).length;
     return {
       words,
       wordCount: words.length,
@@ -4206,13 +4205,11 @@ var AnalysisGenerator = class {
   getActiveText() {
     const selection = window.getSelection();
     if (selection && selection.toString().length > 0) {
-      this.plugin.updateHeaderElementContent("Selection");
       return this.removeMarkdownFormatting(selection.toString());
     }
     const activeView = this.plugin.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
     if (!activeView)
       return "";
-    this.plugin.updateHeaderElementContent("Document");
     return this.removeMarkdownFormatting(activeView.editor.getValue());
   }
   updateBasicMetrics(text, metrics) {
@@ -4266,7 +4263,7 @@ var AnalysisGenerator = class {
   }
   calculateFleschMetrics(text) {
     const fleschScore = main_default.fleschReadingEase(text);
-    this.calculateAndUpdate("FREs", () => fleschScore.toString());
+    this.calculateAndUpdate("FREs", () => fleschScore.toFixed(1));
     this.calculateAndUpdate("FRDf", () => TextUtils.getDifficultyFromScore(fleschScore));
     this.calculateAndUpdate("FKGL", () => main_default.fleschKincaidGrade(text).toString());
   }
@@ -4432,6 +4429,17 @@ var TextAnalysisView = class extends import_obsidian2.ItemView {
     super.onOpen();
     this.updateDisplay();
     this.analysisGenerator.updateAnalysisValues();
+    setTimeout(() => {
+      const titleBar = document.querySelector(".workspace-tab-header-container");
+      if (titleBar) {
+        titleBar.addEventListener("click", () => {
+          const plugin = this.app.plugins.plugins["textanalysis"];
+          if (plugin) {
+            plugin.settingTab.display();
+          }
+        });
+      }
+    }, 100);
     this.boundHandleSelectionChange = this.handleSelectionChange.bind(this);
     this.boundHandleKeydown = this.handleKeydown.bind(this);
     this.boundHandleMouseUp = this.handleMouseUp.bind(this);
@@ -4511,14 +4519,50 @@ var TextAnalysisPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     this.textAnalysisView = null;
-    this.headerElement = null;
-    this.leafInitialized = false;
   }
   async onload() {
+    const loadedData = await this.loadData();
     this.settings = {
       analysisMetricsSettings: {},
-      ...await this.loadData()
+      ...loadedData
     };
+    if (!(loadedData == null ? void 0 : loadedData.analysisMetricsSettings)) {
+      this.settings.analysisMetricsSettings = {
+        "Char": true,
+        "Lettr": true,
+        "Word": true,
+        "Sent": true,
+        "Para": true,
+        "Syll": true,
+        "ASen": true,
+        "ASyl": true,
+        "AChr": true,
+        "Diff": true,
+        "SenC": true,
+        "LexD": true,
+        "FREs": true,
+        "FRDf": true,
+        "FKGL": true,
+        "GFog": true,
+        "SMOG": true,
+        "FCST": true,
+        "ARI": true,
+        "CLI": true,
+        "LWri": true,
+        "NDCh": true,
+        "PSK": true,
+        "RIX": true,
+        "RIXD": true,
+        "LIX": true,
+        "LIXD": true,
+        "GrdM": true,
+        "Rdbl": true,
+        "GrdL": true,
+        "RdTm": true,
+        "SpkT": true
+      };
+      await this.saveSettings();
+    }
     this.analysisGenerator = new AnalysisGenerator(this);
     this.analysisGenerator.analysisMetrics.forEach((metric) => {
       var _a;
@@ -4527,7 +4571,8 @@ var TextAnalysisPlugin = class extends import_obsidian2.Plugin {
     this.addRibbonIcon("eye", "Text Analysis", async () => {
       await this.activateView();
     });
-    this.addSettingTab(new TextAnalysisSettingTab(this.app, this, this.analysisGenerator));
+    this.settingTab = new TextAnalysisSettingTab(this.app, this, this.analysisGenerator);
+    this.addSettingTab(this.settingTab);
     this.addCommand({
       id: "open-textanalysis-panel",
       name: "Open Text Analysis Panel",
@@ -4538,21 +4583,6 @@ var TextAnalysisPlugin = class extends import_obsidian2.Plugin {
       return this.textAnalysisView;
     });
     await this.activateView();
-    this.headerElement = document.createElement("style");
-    this.updateHeaderElementContent("Document");
-    document.head.appendChild(this.headerElement);
-  }
-  updateHeaderElementContent(title) {
-    const elements = document.querySelectorAll(".mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer");
-    elements.forEach((element) => {
-      element.setAttribute("data-content", "Text analysis - " + title);
-    });
-  }
-  onunload() {
-    if (this.headerElement && document.head.contains(this.headerElement)) {
-      document.head.removeChild(this.headerElement);
-      this.headerElement = null;
-    }
   }
   async activateView() {
     let leaf = this.app.workspace.getLeavesOfType("textanalysis-view")[0];
@@ -4561,7 +4591,6 @@ var TextAnalysisPlugin = class extends import_obsidian2.Plugin {
       if (rightLeaf) {
         await rightLeaf.setViewState({ type: "textanalysis-view", active: true });
         this.app.workspace.revealLeaf(rightLeaf);
-        this.leafInitialized = true;
       }
     } else {
       const leafEl = document.querySelector(".mod-right-split > .workspace-tabs:not(.mod-top)");

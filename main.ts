@@ -39,6 +39,19 @@ class TextAnalysisView extends ItemView {
         this.updateDisplay();
         this.analysisGenerator.updateAnalysisValues();
 
+        // Add click handler to the title bar
+        setTimeout(() => {
+            const titleBar = document.querySelector('.workspace-tab-header-container');
+            if (titleBar) {
+                titleBar.addEventListener('click', () => {
+                    const plugin = (this.app as any).plugins.plugins['textanalysis'];
+                    if (plugin) {
+                        plugin.settingTab.display();
+                    }
+                });
+            }
+        }, 100);
+
         // Bind event handlers
         this.boundHandleSelectionChange = this.handleSelectionChange.bind(this);
         this.boundHandleKeydown = this.handleKeydown.bind(this);
@@ -151,14 +164,30 @@ export default class TextAnalysisPlugin extends Plugin {
     settings: TextAnalysisSettings;
     analysisGenerator: AnalysisGenerator;
     textAnalysisView: TextAnalysisView | null = null;
-    headerElement: HTMLStyleElement | null = null;
-    leafInitialized = false;
+    settingTab: TextAnalysisSettingTab;
 
     async onload(): Promise<void> {
+        // Initialize default settings if no data.json exists
+        const loadedData = await this.loadData();
         this.settings = {
             analysisMetricsSettings: {},
-            ...await this.loadData()
+            ...loadedData
         };
+
+        // If no settings were loaded (no data.json), initialize with all metrics enabled
+        if (!loadedData?.analysisMetricsSettings) {
+            this.settings.analysisMetricsSettings = {
+                'Char': true, 'Lettr': true, 'Word': true, 'Sent': true,
+                'Para': true, 'Syll': true, 'ASen': true, 'ASyl': true,
+                'AChr': true, 'Diff': true, 'SenC': true, 'LexD': true,
+                'FREs': true, 'FRDf': true, 'FKGL': true, 'GFog': true,
+                'SMOG': true, 'FCST': true, 'ARI': true, 'CLI': true,
+                'LWri': true, 'NDCh': true, 'PSK': true, 'RIX': true,
+                'RIXD': true, 'LIX': true, 'LIXD': true, 'GrdM': true,
+                'Rdbl': true, 'GrdL': true, 'RdTm': true, 'SpkT': true
+            };
+            await this.saveSettings();
+        }
 
         this.analysisGenerator = new AnalysisGenerator(this);
 
@@ -171,7 +200,8 @@ export default class TextAnalysisPlugin extends Plugin {
             await this.activateView();
         });
 
-        this.addSettingTab(new TextAnalysisSettingTab(this.app, this, this.analysisGenerator));
+        this.settingTab = new TextAnalysisSettingTab(this.app, this, this.analysisGenerator);
+        this.addSettingTab(this.settingTab);
 
         this.addCommand({
             id: 'open-textanalysis-panel',
@@ -185,24 +215,6 @@ export default class TextAnalysisPlugin extends Plugin {
         });
 
         await this.activateView();
-
-        this.headerElement = document.createElement('style');
-        this.updateHeaderElementContent('Document');
-        document.head.appendChild(this.headerElement);
-    }
-
-    updateHeaderElementContent(title: string): void {
-        const elements = document.querySelectorAll('.mod-right-split > .workspace-tabs:not(.mod-top) .workspace-tab-header-spacer');
-        elements.forEach(element => {
-            element.setAttribute('data-content', 'Text analysis - ' + title);
-        });
-    }
-
-    onunload(): void {
-        if (this.headerElement && document.head.contains(this.headerElement)) {
-            document.head.removeChild(this.headerElement);
-            this.headerElement = null;
-        }
     }
 
     async activateView(): Promise<void> {
@@ -212,7 +224,6 @@ export default class TextAnalysisPlugin extends Plugin {
             if (rightLeaf) {
                 await rightLeaf.setViewState({ type: 'textanalysis-view', active: true });
                 this.app.workspace.revealLeaf(rightLeaf);
-                this.leafInitialized = true;
             }
         } else {
             const leafEl = document.querySelector('.mod-right-split > .workspace-tabs:not(.mod-top)');
